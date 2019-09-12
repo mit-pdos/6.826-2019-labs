@@ -7,7 +7,6 @@ COQRFLAGS	:= -R src POCS
 COQARGS		:= $(COQRFLAGS) -w -undo-batch-mode
 
 COQDOCFLAGS:= \
-  --no-externals \
   --toc --toc-depth 2 --html \
   --index indexpage --no-lib-name --parse-comments \
   --with-header assets/header.html --with-footer assets/footer.html

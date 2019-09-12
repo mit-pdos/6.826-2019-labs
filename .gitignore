@@ -2,6 +2,8 @@
 .lia.cache
 .nia.cache
 .coqdeps.d
+/doc/*.html
+/doc/coqdoc.css
 /*/.stack-work
 /*/extract
 /lab*-handin.tar.gz
