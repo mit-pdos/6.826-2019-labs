@@ -42,7 +42,7 @@ clean:
 
 docs: $(ALL_VOFILES)
 	@mkdir -p doc
-	coqdoc $(COQRFLAGS) $(COQDOCFLAGS) -g --interpolate --coqlib http://coq.inria.fr/stdlib -d doc $(ALL_VFILES)
+	coqdoc $(COQRFLAGS) $(COQDOCFLAGS) --interpolate --coqlib http://coq.inria.fr/stdlib -d doc $(ALL_VFILES)
 
 .PHONY: default clean docs
 .DELETE_ON_ERROR:
