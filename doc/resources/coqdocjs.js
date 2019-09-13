@@ -6,7 +6,13 @@ function replace(s){
   if (m = s.match(/^(.+)'/)) {
     return replace(m[1])+"'";
   } else if (m = s.match(/^([A-Za-z]+)_?(\d+)$/)) {
-    return replace(m[1])+m[2].replace(/\d/g, function(d){return coqdocjs.subscr[d]});
+    return replace(m[1])+m[2].replace(/\d/g, function(d){
+      if (coqdocjs.subscr.hasOwnProperty(d)) {
+        return coqdocjs.subscr[d];
+      } else {
+        return d;
+      }
+    });
   } else if (coqdocjs.repl.hasOwnProperty(s)){
     return coqdocjs.repl[s]
   } else {
@@ -160,11 +166,11 @@ function repairDom(){
 
 function fixTitle(){
   var url = "/" + window.location.pathname;
-  var modulename = "." + url.substring(url.lastIndexOf('/')+1, url.lastIndexOf('.'));
-  modulename = modulename.substring(modulename.lastIndexOf('.')+1);
+  var basename = url.substring(url.lastIndexOf('/')+1, url.lastIndexOf('.'));
+  modulename = basename.substring(("." + basename).lastIndexOf('.'));
   if (modulename === "toc") {modulename = "Table of Contents";}
   else if (modulename === "indexpage") {modulename = "Index";}
-  else {modulename = modulename + ".v";};
+  else {modulename = basename + ".v";};
   document.title = modulename;
 }
 
