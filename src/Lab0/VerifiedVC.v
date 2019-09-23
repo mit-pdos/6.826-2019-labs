@@ -1,9 +1,20 @@
+(*** Vale's VC generator for POCS ***)
+
 Require Import POCS.
 Require Import ThreeVariablesAPI.
 
+Unset Implicit Arguments.
+
 Module ThreeVarVC (vars : VarsAPI).
 
+  (* begin hide *)
   Implicit Types (s:State).
+  (* end hide *)
+
+(******************************************************************************)
+
+  (*** Defining quickCode ***)
+
 
   (* note that we need all the weakest preconditions to also talk about return
   values of type [T], so almost everything will take an extra parameter for the
@@ -16,7 +27,7 @@ Module ThreeVarVC (vars : VarsAPI).
      the "weakest" in weakest preconditions means [wp k] is supposed to be the
      minimal condition necessary to guarantee k, but we don't prove that (as is
      common) *)
-  Definition has_wp T (code: proc T) (wp:t_wp T) :=
+  Definition has_wp {T} (code: proc T) (wp:t_wp T) :=
     forall (k: T -> State -> Prop),
       proc_spec (fun (_:unit) s0 =>
                    {|
@@ -27,7 +38,7 @@ Module ThreeVarVC (vars : VarsAPI).
                 code
                 vars.recover vars.abstr.
 
-  Class quickCode T (code:proc T) : Type :=
+  Class quickCode {T} (code:proc T) : Type :=
     QProc {
         (* a quickCode has a _predicate transformer_ function wp that
         produces a weakest precondition for a given postcondition *)
@@ -36,9 +47,15 @@ Module ThreeVarVC (vars : VarsAPI).
         hasWp: has_wp code wp;
       }.
 
+  (* begin hide *)
   Arguments QProc {T code} wp hasWp.
   Arguments wp {T} {code} qc : rename.
   Arguments hasWp {T} {code} qc : rename.
+  (* end hide *)
+
+  (******************************************************************************)
+
+ (*+ Examples of quickCode +*)
 
   (* the type of QProc is as given in the paper (just written with different
   syntax) *)
@@ -46,8 +63,9 @@ Module ThreeVarVC (vars : VarsAPI).
 
   Instance quick_read var : quickCode (vars.read var).
   Proof.
-    refine (QProc
-              (fun k => (fun s => k (StateVar var s) s)) _).
+    refine {|
+        wp := fun k => (fun s => k (StateVar var s) s)
+      |}.
 
     unfold has_wp; intros.
     step_proc.
@@ -55,12 +73,13 @@ Module ThreeVarVC (vars : VarsAPI).
 
   Instance quick_write var v : quickCode (vars.write var v).
   Proof.
-    refine (QProc
-              (fun k => (fun s => k tt (match var with
-                                  | VarX => mkState v (StateY s) (StateZ s)
-                                  | VarY => mkState (StateX s) v (StateZ s)
-                                  | VarZ => mkState (StateX s) (StateY s) v
-                                  end))) _).
+    refine {|
+        wp := fun k => (fun s => k tt (match var with
+                                 | VarX => mkState v (StateY s) (StateZ s)
+                                 | VarY => mkState (StateX s) v (StateZ s)
+                                 | VarZ => mkState (StateX s) (StateY s) v
+                                 end))
+      |}.
 
     unfold has_wp; intros.
     step_proc.
@@ -69,21 +88,28 @@ Module ThreeVarVC (vars : VarsAPI).
 
   Instance quick_ret T (x:T) : quickCode (Ret x).
   Proof.
-    refine (QProc
-              (fun k => (fun s => k x s)) _).
+    refine {|
+      wp :=
+        fun k => (fun s => k x s)
+      |}.
 
     unfold has_wp; intros.
     step_proc.
   Defined.
 
-  (* our only notion of code is [proc T], where commands are sequenced with
-  functions rather than being a plain list (the plain list makes more sense for
-  assembly, where there's no notion of "returning" a value)
+  (*+ Packaging quickCodes for a procedure +*)
 
-   For that reason we immediately jump to the "shallow embedding" version in the
-   paper that supports ghost state, although we don't thread ghost state through
-   but return values. *)
-  Inductive quickCodes : forall T, proc T -> Type :=
+  (* The paper first defines a version of [quickCodes] for a list of
+     instructions. *)
+
+  (* Our only notion of code is [proc T], where commands are sequenced with
+     functions rather than being a plain list (the plain list makes more sense
+     for assembly, where there's no notion of "returning" a value)
+
+     For that reason we immediately jump to the "shallow embedding" version in
+     the paper that supports ghost state; we don't thread ghost state
+     but return values. *)
+  Inductive quickCodes : forall {T:Type}, proc T -> Type :=
   | QRet : quickCodes (Ret tt)
   | QBind : forall T1 (c:proc T1) T2 (cs:T1 -> proc T2),
       forall (qc:quickCode c)
@@ -91,10 +117,17 @@ Module ThreeVarVC (vars : VarsAPI).
         quickCodes (Bind c cs)
   .
 
+  (******************************************************************************)
+
+  (*** Writing the VC generator ***)
+
+  (* So now we have a representation of programs along with weakest
+     preconditions for the basic components. *)
+
   (* vc_gen is the crux of this approach: it sequences weakest preconditions
   together from [quickCode] instances to build up all the verification
   conditions for a whole procedure. *)
-  Fixpoint vc_gen T (cs:proc T) (qcs: quickCodes cs) (k: T -> State -> Prop)
+  Fixpoint vc_gen {T} (cs:proc T) (qcs: quickCodes cs) (k: T -> State -> Prop)
            {struct qcs}
     : State -> Prop.
     (* I had a hard time writing this function so I switched to proof mode. *)
@@ -108,9 +141,7 @@ Module ThreeVarVC (vars : VarsAPI).
       refine (vc_gen _ (cs x) (f_qcs x) k s1).
   Defined.
 
-  Arguments vc_gen {T} cs qcs k.
-
-  Theorem vc_sound T (cs:proc T) (qcs: quickCodes cs) : has_wp cs (vc_gen cs qcs).
+  Theorem vc_sound {T} (cs:proc T) {qcs: quickCodes cs} : has_wp cs (vc_gen cs qcs).
   Proof.
     induction qcs; simpl.
     - unfold has_wp; step_proc.
@@ -123,41 +154,41 @@ Module ThreeVarVC (vars : VarsAPI).
       step_proc.
   Qed.
 
-  Definition addX (delta : nat) : proc unit :=
+  (*** Applying the VC generator ***)
+
+  Definition addX (d : nat) : proc unit :=
     x <- vars.read VarX;
-      _ <- vars.write VarX (x + delta);
+      _ <- vars.write VarX (x + d);
       Ret tt.
 
   (* we need a quickCodes version of addX to teach the vc generator the
   structure of the procedure as well as the wp's for all the primitives; here's
   some magic so Coq will do that for us *)
+  (* begin hide *)
   Existing Class quickCodes.
   Existing Instance QRet.
   Existing Instance QBind.
   Arguments QBind {T1 c T2 cs}.
+  (* end hide *)
 
-  Definition quick_addX delta : quickCodes (addX delta) := _.
+  Definition quick_addX d : quickCodes (addX d) := _.
 
-  Theorem quick_addX_is : forall delta,
-      quick_addX delta =
-      (* we could also have written the quickCodes version manually (or from a
-      tool, as in Vale) *)
+  Theorem quick_addX_is : forall d,
+      quick_addX d =
       QBind (quick_read VarX)
-            (fun x => QBind (quick_write VarX (x + delta))
+            (fun x => QBind (quick_write VarX (x + d))
                          (fun _ => QRet)).
   Proof.
     reflexivity.
   Qed.
 
-  Arguments vc_sound {T} cs {qcs}.
-
-  Theorem addX_ok : forall delta,
+  Theorem addX_ok : forall d,
       proc_spec (fun (_:unit) state => {|
                      pre := True;
-                     post := fun r state' => state' = mkState (delta + StateX state) (StateY state) (StateZ state);
+                     post := fun r state' => state' = mkState (d + StateX state) (StateY state) (StateZ state);
                      recovered := fun _ _ => False;
                    |})
-                (addX delta)
+                (addX d)
                 vars.recover
                 vars.abstr.
   Proof.
@@ -166,10 +197,10 @@ Module ThreeVarVC (vars : VarsAPI).
     rename state0 into state.
 
     pose proof
-         (vc_sound (addX delta))
+         (vc_sound (addX d))
          (fun r state' =>
             state' =
-            mkState (delta + StateX state) (StateY state) (StateZ state)).
+            mkState (d + StateX state) (StateY state) (StateZ state)).
 
     (* if that's tedious, we could instead get its parts from the goal: *)
     match goal with
