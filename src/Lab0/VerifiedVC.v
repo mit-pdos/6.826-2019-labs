@@ -154,16 +154,17 @@ Module ThreeVarVC (vars : VarsAPI).
       step_proc.
   Qed.
 
+  (******************************************************************************)
+
   (*** Applying the VC generator ***)
 
   Definition addX (d : nat) : proc unit :=
     x <- vars.read VarX;
-      _ <- vars.write VarX (x + d);
-      Ret tt.
+    _ <- vars.write VarX (x + d);
+    Ret tt.
 
-  (* we need a quickCodes version of addX to teach the vc generator the
-  structure of the procedure as well as the wp's for all the primitives; here's
-  some magic so Coq will do that for us *)
+  (* Given a procedure [p], we'll want a [quickCodes p] that gives all the
+  [quickCode] instances along the way. *)
   (* begin hide *)
   Existing Class quickCodes.
   Existing Instance QRet.
@@ -171,16 +172,8 @@ Module ThreeVarVC (vars : VarsAPI).
   Arguments QBind {T1 c T2 cs}.
   (* end hide *)
 
+  (* With that magic in place, Coq can find [quickCodes] automatically. *)
   Definition quick_addX d : quickCodes (addX d) := _.
-
-  Theorem quick_addX_is : forall d,
-      quick_addX d =
-      QBind (quick_read VarX)
-            (fun x => QBind (quick_write VarX (x + d))
-                         (fun _ => QRet)).
-  Proof.
-    reflexivity.
-  Qed.
 
   Theorem addX_ok : forall d,
       proc_spec (fun (_:unit) state => {|
@@ -196,13 +189,26 @@ Module ThreeVarVC (vars : VarsAPI).
     spec_intros.
     rename state0 into state.
 
-    pose proof
-         (vc_sound (addX d))
-         (fun r state' =>
-            state' =
-            mkState (d + StateX state) (StateY state) (StateZ state)).
+    (* vc_sound is a theorem that takes a procedure you want to reason about,
+       and produces a verified VC generator for it. Let's look at that. *)
+    pose proof (vc_sound (addX d)) as Hwp;
+      unfold has_wp in Hwp.
 
-    (* if that's tedious, we could instead get its parts from the goal: *)
+    (* after unfolding [has_wp], we see that [vc_sound] produces a specification
+    for any postcondition, where the precondition is computed by [vc_gen]. Let's
+    specialze to the postcondition we care about. *)
+    specialize (Hwp
+                  (fun r state' =>
+                     state' =
+                     mkState (d + StateX state) (StateY state) (StateZ state))).
+    (* this runs the VC generator *)
+    simpl in Hwp.
+
+    (******************************************************************************)
+
+    (* if all of that is tedious, we could instead get the procedure and
+       postcondition from the goal, with Black Magic (that is, Ltac): *)
+    clear Hwp.
     match goal with
     | [ |- proc_spec
             (fun _ state0 =>
