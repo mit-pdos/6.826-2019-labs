@@ -13,7 +13,7 @@ Module ThreeVarVC (vars : VarsAPI).
 
 (******************************************************************************)
 
-  (*** Defining quickCode ***)
+  (*+ Defining weakest preconditions **)
 
 
   (* note that we need all the weakest preconditions to also talk about return
@@ -119,7 +119,7 @@ Module ThreeVarVC (vars : VarsAPI).
 
   (******************************************************************************)
 
-  (*** Writing the VC generator ***)
+  (*+ Writing the VC generator **)
 
   (* So now we have a representation of programs along with weakest
      preconditions for the basic components. *)
@@ -127,8 +127,8 @@ Module ThreeVarVC (vars : VarsAPI).
   (* vc_gen is the crux of this approach: it sequences weakest preconditions
   together from [quickCode] instances to build up all the verification
   conditions for a whole procedure. *)
-  Fixpoint vc_gen {T} (cs:proc T) (qcs: quickCodes cs) (k: T -> State -> Prop)
-           {struct qcs}
+  Fixpoint vc_gen {T} (cs:proc T) (qcs: quickCodes cs)
+           (k: T -> State -> Prop) {struct qcs}
     : State -> Prop.
     (* I had a hard time writing this function so I switched to proof mode. *)
     destruct qcs as [| T1 c T2 cs qc f_qcs]; intro s0.
@@ -141,7 +141,8 @@ Module ThreeVarVC (vars : VarsAPI).
       refine (vc_gen _ (cs x) (f_qcs x) k s1).
   Defined.
 
-  Theorem vc_sound {T} (cs:proc T) {qcs: quickCodes cs} : has_wp cs (vc_gen cs qcs).
+  Theorem vc_sound {T} (cs:proc T) {qcs: quickCodes cs} :
+    has_wp cs (vc_gen cs qcs).
   Proof.
     induction qcs; simpl.
     - unfold has_wp; step_proc.
@@ -170,10 +171,10 @@ Module ThreeVarVC (vars : VarsAPI).
   Existing Instance QRet.
   Existing Instance QBind.
   Arguments QBind {T1 c T2 cs}.
-  (* end hide *)
 
   (* With that magic in place, Coq can find [quickCodes] automatically. *)
   Definition quick_addX d : quickCodes (addX d) := _.
+  (* end hide *)
 
   Theorem addX_ok : forall d,
       proc_spec (fun (_:unit) state => {|
@@ -209,17 +210,21 @@ Module ThreeVarVC (vars : VarsAPI).
     (* if all of that is tedious, we could instead get the procedure and
        postcondition from the goal, with Black Magic (that is, Ltac): *)
     clear Hwp.
-    match goal with
-    | [ |- proc_spec
-            (fun _ state0 =>
-               {| post := @?k0 state0 |})
-            ?code
-            _ _ ] =>
-      let k := constr:(k0 state) in
-      let H := fresh in
-      pose proof (vc_sound code k) as H;
+    Ltac vc_gen :=
+      match goal with
+      | [ state: State
+          |- proc_spec
+              (fun _ state0 =>
+                 {| post := @?k0 state0 |})
+              ?code
+              _ _ ] =>
+        let k := constr:(k0 state) in
+        let H := fresh in
+        pose proof (vc_sound code k) as H;
         simpl in H
-    end.
+      end.
+
+    vc_gen.
 
     step_proc.
     f_equal.
