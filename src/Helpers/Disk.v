@@ -632,6 +632,59 @@ Proof.
   - rewrite diskUpds_size. lia.
 Qed.
 
+Theorem append_size : forall d1 d2,
+    diskSize (d1 ++ d2) = diskSize d1 + diskSize d2.
+Proof.
+  apply app_length.
+Qed.
+
+Hint Rewrite append_size : disk_size.
+Hint Rewrite diskUpds_size : disk_size.
+
+Theorem diskUpd_app1 : forall d1 d2 a v,
+    a < length d1 ->
+    diskUpd (d1 ++ d2) a v = diskUpd d1 a v ++ d2.
+Proof.
+  induction d1; simpl; intros.
+  - lia.
+  - destruct a0; simpl; auto.
+    rewrite IHd1 by lia; auto.
+Qed.
+
+Theorem diskUpd_app2 : forall d1 d2 a v,
+    a >= length d1 ->
+    diskUpd (d1 ++ d2) a v = d1 ++ diskUpd d2 (a - length d1) v.
+Proof.
+  induction d1; simpl; intros.
+  - replace (a-0) with a by lia; auto.
+  - destruct a0; simpl; try lia.
+    rewrite IHd1 by lia; auto.
+Qed.
+
+Theorem diskUpds_app1 : forall d1 d2 n v,
+    n+length v < length d1 ->
+  diskUpds (d1 ++ d2) n v = diskUpds d1 n v ++ d2.
+Proof.
+  intros.
+  generalize dependent n.
+  induction v; simpl; auto; intros.
+  rewrite IHv by lia.
+  rewrite diskUpd_app1; auto.
+  autorewrite with disk_size.
+  unfold diskSize; lia.
+Qed.
+
+Theorem diskUpds_app2 : forall d1 d2 n v,
+  length d1 <= n ->
+  diskUpds (d1 ++ d2) n v = d1 ++ diskUpds d2 (n - length d1) v.
+Proof.
+  intros.
+  generalize dependent n.
+  induction v; simpl; auto; intros.
+  rewrite IHv by lia.
+  rewrite diskUpd_app2 by lia.
+  replace (n + 1 - length d1) with (n - length d1 + 1) by lia; auto.
+Qed.
 
 (** We combine all of the above theorems into a hint database called "upd".
     This means that, when you type [autorewrite with upd] in some Coq proof,
