@@ -561,9 +561,10 @@ Proof.
 Qed.
 
 Hint Rewrite diskGets_length : disk_size.
-Local Hint Rewrite nth_error_app1 using (autorewrite with disk_size in *; lia) : upd.
-Local Hint Rewrite nth_error_app2 using (autorewrite with disk_size in *; lia) : upd.
-Local Hint Rewrite diskGets_index using lia : upd.
+Section diskGets_proof.
+Hint Rewrite nth_error_app1 using (autorewrite with disk_size in *; lia) : upd.
+Hint Rewrite nth_error_app2 using (autorewrite with disk_size in *; lia) : upd.
+Hint Rewrite diskGets_index using lia : upd.
 
 Theorem diskGets_app_disk : forall d1 d2 a count,
     count >= length d1-a ->
@@ -586,6 +587,7 @@ Proof.
     do 2 f_equal.
     lia.
 Qed.
+End diskGets_proof.
 
 Theorem diskGets_append_one : forall d1 a x count,
     a < length d1 ->
